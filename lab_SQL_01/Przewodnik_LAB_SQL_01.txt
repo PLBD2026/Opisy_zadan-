@@ -1,0 +1,429 @@
+﻿======================================================================
+PRZEWODNIK – podstawowe polecenia psql i pgAdmin
+Bazy danych · dr Mariusz Skrzypek
+======================================================================
+
+
+1. JAK KORZYSTAĆ Z PRZEWODNIKA
+----------------------------------------------------------------------
+
+Przewodnik pokazuje polecenia potrzebne na laboratorium, ale na innym
+przykładzie: bazie biblioteki. Polecenia sprawdzono w PostgreSQL 16,
+a wyniki są skopiowane z rzeczywistego wykonania.
+
+  Obiekt w przewodniku   Nazwa              Co tworzysz na laboratorium
+  ---------------------  -----------------  ---------------------------
+  Baza danych            biblioteka         bazę s<numer_albumu>
+  Schemat                katalog            schemat s<numer_albumu>
+  Tabela                 katalog.ksiazka    tabelę student
+
+Znaki w zapisie poleceń:
+  - => oraz =# to znak zachęty psql (nie wpisujesz go),
+    # oznacza superużytkownika,
+  - polecenia SQL kończysz średnikiem ;
+    polecenia psql z ukośnikiem \ – bez średnika,
+  - -- rozpoczyna komentarz.
+
+
+2. psql – URUCHOMIENIE I POMOC
+----------------------------------------------------------------------
+
+psql uruchamiasz z terminala, podając serwer, port, użytkownika
+i bazę. W pgAdmin to samo okno otwiera Tools -> PSQL Tool.
+
+    # pełna postać: host, port, użytkownik, baza
+    psql -h localhost -p 5432 -U jkowalski -d biblioteka
+
+    # serwer lokalny, domyślny port, baza o nazwie użytkownika
+    psql -U jkowalski
+
+W psql działają dwa rodzaje poleceń:
+
+  Rodzaj               Przykład           Kto wykonuje       Zakończenie
+  -------------------  -----------------  -----------------  -----------
+  Polecenie SQL        SELECT version();  serwer PostgreSQL  średnik ;
+  Meta-polecenie psql  \l                 sam program psql   Enter, bez
+                                          (zamienia je na    średnika
+                                          zapytania do
+                                          katalogu)
+
+Polecenia pomocy i obsługi sesji:
+
+  \?               lista wszystkich meta-poleceń psql
+  \h CREATE TABLE  składnia polecenia SQL
+  \x               przełącza wyświetlanie pionowe (wygodne dla
+                   szerokich wyników)
+  \timing          pokazuje czas wykonania zapytań
+  \echo tekst      wypisuje tekst (np. w skrypcie)
+  \q               kończy pracę z psql
+
+Przyrostki modyfikują meta-polecenia: + dodaje szczegóły (rozmiar,
+opis, uprawnienia), a S pokazuje także obiekty systemowe.
+Na przykład \dn+ albo \dtS.
+
+
+3. psql – BAZY, SCHEMATY, TABELE I ŚCIEŻKA PRZESZUKIWANIA
+----------------------------------------------------------------------
+
+3.1. Bazy danych
+
+\l wypisuje wszystkie bazy na serwerze, \l nazwa – tylko wskazaną,
+a \l+ dodaje rozmiar i opis. To samo daje zapytanie do katalogu
+pg_database.
+
+    => \l biblioteka
+        Name    |  Owner   | Encoding | Locale Provider | Collate |  Ctype  | ...
+    ------------+----------+----------+-----------------+---------+---------+----
+     biblioteka | postgres | UTF8     | libc            | C.UTF-8 | C.UTF-8 | ...
+
+    => SELECT datname, pg_encoding_to_char(encoding) FROM pg_database;
+
+
+3.2. Połączenie z inną bazą
+
+Jedna sesja jest zawsze połączona z jedną bazą. \c (pełna nazwa
+\connect) zamyka bieżące połączenie i otwiera nowe. \conninfo
+pokazuje, gdzie jesteś.
+
+    => \c biblioteka
+    You are now connected to database "biblioteka" as user "postgres".
+
+    => \c biblioteka jkowalski localhost 5432   -- baza, użytkownik, host, port
+
+    => \conninfo
+    You are connected to database "biblioteka" as user "postgres" on host "localhost"
+    (address "127.0.0.1") at port "5432".
+
+    => SELECT current_database(), current_user;
+
+
+3.3. Schematy
+
+\dn wypisuje schematy użytkowników, \dnS – także systemowe, \dn+
+dodaje uprawnienia i opis.
+
+    biblioteka=> \dn
+           List of schemas
+      Name   |       Owner
+    ---------+-------------------
+     katalog | postgres
+     public  | pg_database_owner
+
+
+3.4. Tabele
+
+\dt bez argumentu pokazuje tabele ze schematów na ścieżce
+przeszukiwania, z pominięciem schematów systemowych. Wzorzec
+schemat.* pokazuje tabele wskazanego schematu niezależnie od ścieżki.
+
+    biblioteka=> \dt
+    Did not find any relations.          -- katalog nie jest na ścieżce
+
+    biblioteka=> \dt katalog.*
+              List of relations
+     Schema  |  Name   | Type  |  Owner
+    ---------+---------+-------+----------
+     katalog | ksiazka | table | postgres
+
+Pokrewne polecenia: \dv (widoki), \ds (sekwencje), \di (indeksy),
+\d nazwa (struktura jednego obiektu).
+
+
+3.5. Ścieżka przeszukiwania (search_path)
+
+search_path to lista schematów, w których serwer szuka obiektu
+podanego bez nazwy schematu. Pierwszy istniejący schemat z listy jest
+też miejscem, gdzie powstają nowe obiekty bez nazwy schematu.
+Domyślna wartość to "$user", public.
+
+    biblioteka=> SHOW search_path;
+       search_path
+    -----------------
+     "$user", public
+
+    biblioteka=> SET search_path TO katalog, public;   -- tylko do końca sesji
+    biblioteka=> SELECT current_schemas(true);
+           current_schemas
+    -----------------------------
+     {pg_catalog,katalog,public}
+
+    biblioteka=> \dt
+     Schema  |  Name   | Type  |  Owner
+    ---------+---------+-------+----------
+     katalog | ksiazka | table | postgres
+
+Sposoby ustawienia:
+
+  Sesja (do rozłączenia):
+    SET search_path TO katalog, public;
+
+  Baza (każda nowa sesja w tej bazie):
+    ALTER DATABASE biblioteka SET search_path TO katalog, public;
+
+  Użytkownik (każda nowa sesja tego użytkownika):
+    ALTER ROLE jkowalski SET search_path TO katalog, public;
+
+  Powrót do domyślnej (bieżąca sesja):
+    RESET search_path;
+
+Ustawienie dla bazy lub roli działa od następnego połączenia, więc
+sprawdź je po \c.
+
+
+4. SQL – TWORZENIE BAZY, SCHEMATU I TABELI
+----------------------------------------------------------------------
+
+Te same polecenia wykonasz w psql i w Query Tool w pgAdmin. Okna
+tworzenia obiektów w pgAdmin generują dokładnie takie polecenia
+(zakładka SQL).
+
+4.1. Baza danych
+
+    CREATE DATABASE biblioteka
+        WITH OWNER = jkowalski
+             ENCODING = 'UTF8';
+
+    COMMENT ON DATABASE biblioteka IS 'Baza przykładowa – katalog biblioteki';
+
+CREATE DATABASE nie może działać wewnątrz transakcji, a nowa baza jest
+kopią szablonu template1. Do nowej bazy trzeba się osobno połączyć.
+
+
+4.2. Schemat
+
+    -- po połączeniu z bazą biblioteka
+    CREATE SCHEMA katalog AUTHORIZATION jkowalski;
+
+    CREATE SCHEMA IF NOT EXISTS archiwum;   -- bez błędu, gdy już istnieje
+
+Schemat powstaje w bazie, z którą jesteś połączony. Sprawdź to przed
+wykonaniem polecenia.
+
+
+4.3. Tabela we wskazanym schemacie
+
+    CREATE TABLE katalog.ksiazka (
+        id_ksiazki  integer      PRIMARY KEY,
+        tytul       varchar(200) NOT NULL,
+        autor       varchar(120) NOT NULL,
+        rok_wydania smallint     CHECK (rok_wydania BETWEEN 1450 AND 2100),
+        dzial       varchar(60)
+    );
+
+  katalog.ksiazka   nazwa kwalifikowana: tabela powstaje w schemacie
+                    katalog, niezależnie od search_path
+  PRIMARY KEY       klucz główny: wartości unikalne i różne od NULL,
+                    tworzy indeks
+  NOT NULL          kolumna wymagana
+  CHECK (...)       warunek, który musi spełnić każda wartość
+  kolumna bez       dopuszcza NULL
+  więzów (dzial)
+
+Przydatne typy danych:
+
+  Typ                          Zastosowanie              Uwagi
+  ---------------------------  ------------------------  ------------------
+  integer                      identyfikatory, liczniki  zakres ok. ±2,1 mld
+  smallint                     małe liczby (rok, ocena)  −32768 do 32767
+  varchar(n)                   tekst o ograniczonej      n to liczba znaków
+                               długości
+  text                         tekst bez limitu długości
+  char(n)                      tekst o stałej długości   dopełniany spacjami
+  integer GENERATED ALWAYS     numer nadawany            zamiast serial
+    AS IDENTITY                automatycznie
+
+
+4.4. Struktura tabeli
+
+W psql strukturę pokazuje \d (z + także opisy i sposób
+przechowywania):
+
+    biblioteka=> \d katalog.ksiazka
+                            Table "katalog.ksiazka"
+       Column    |          Type          | Collation | Nullable | Default
+    -------------+------------------------+-----------+----------+---------
+     id_ksiazki  | integer                |           | not null |
+     tytul       | character varying(200) |           | not null |
+     autor       | character varying(120) |           | not null |
+     rok_wydania | smallint               |           |          |
+     dzial       | character varying(60)  |           |          |
+    Indexes:
+        "ksiazka_pkey" PRIMARY KEY, btree (id_ksiazki)
+    Check constraints:
+        "ksiazka_rok_wydania_check" CHECK (rok_wydania >= 1450 AND rok_wydania <= 2100)
+
+W każdym narzędziu (także w pgAdmin) działa zapytanie do
+standardowego katalogu information_schema:
+
+    SELECT table_schema, table_name
+    FROM   information_schema.tables
+    WHERE  table_schema = 'katalog';
+
+    SELECT column_name, data_type, character_maximum_length, is_nullable
+    FROM   information_schema.columns
+    WHERE  table_schema = 'katalog' AND table_name = 'ksiazka'
+    ORDER  BY ordinal_position;
+
+     column_name |     data_type     | character_maximum_length | is_nullable
+    -------------+-------------------+--------------------------+-------------
+     id_ksiazki  | integer           |                          | NO
+     tytul       | character varying |                      200 | NO
+     autor       | character varying |                      120 | NO
+     rok_wydania | smallint          |                          | YES
+     dzial       | character varying |                       60 | YES
+
+
+5. pgAdmin 4 – PRACA W INTERFEJSIE GRAFICZNYM
+----------------------------------------------------------------------
+
+pgAdmin przedstawia serwer jako drzewo obiektów (Object Explorer):
+Servers -> serwer -> Databases -> baza -> Schemas -> schemat -> Tables.
+Większość operacji wywołujesz prawym przyciskiem myszy na węźle
+drzewa.
+
+5.1. Rejestracja serwera
+
+  1. Prawy przycisk na Servers -> Register -> Server...
+  2. Zakładka General: nazwa wyświetlana, np. Lab PostgreSQL.
+  3. Zakładka Connection: Host name/address, Port, Maintenance
+     database (postgres), Username, Password.
+  4. Save. Serwer pojawia się w drzewie, a jego bazy w węźle Databases.
+
+
+5.2. Połączenie z bazą i Query Tool
+
+  - Kliknięcie bazy w drzewie łączy z nią pgAdmin (ikona bazy zmienia
+    się z szarej na kolorową). Prawy przycisk -> Disconnect Database
+    rozłącza.
+  - Query Tool (prawy przycisk na bazie -> Query Tool lub menu
+    Tools -> Query Tool) otwiera edytor SQL połączony z tą bazą, która
+    jest zaznaczona w drzewie. Nazwa bazy jest widoczna w nagłówku
+    karty.
+  - Zapytanie uruchamiasz klawiszem F5 albo przyciskiem Execute.
+    Jeśli zaznaczysz fragment tekstu, wykona się tylko on.
+
+
+5.3. Tworzenie obiektów w oknach dialogowych
+
+  Baza:
+    gdzie: prawy przycisk na Databases -> Create -> Database...
+    pola:  General: Database, Owner, Comment;
+           Definition: Encoding, Template
+
+  Schemat:
+    gdzie: prawy przycisk na Schemas -> Create -> Schema...
+    pola:  General: Name, Owner
+
+  Tabela:
+    gdzie: prawy przycisk na Tables -> Create -> Table...
+    pola:  General: Name, Schema;
+           Columns: nazwa, typ, długość, Not NULL?, Primary key?;
+           Constraints: Check
+
+Każde okno ma zakładkę SQL z poleceniem, które pgAdmin wyśle po
+kliknięciu Save. Dla bazy biblioteka wygląda ono mniej więcej tak:
+
+    CREATE DATABASE biblioteka
+        WITH
+        OWNER = jkowalski
+        ENCODING = 'UTF8'
+        CONNECTION LIMIT = -1
+        IS_TEMPLATE = False;
+
+
+5.4. Przeglądanie tabel i struktury
+
+  - Rozwiń Schemas -> katalog -> Tables. Liczba w nawiasie przy węźle
+    to liczba tabel.
+  - Po zaznaczeniu tabeli panel Properties pokazuje jej właściwości,
+    a panel SQL – polecenie CREATE TABLE odtworzone z katalogu.
+  - Prawy przycisk na tabeli -> Properties... -> Columns pokazuje
+    kolumny z typami i więzami.
+  - Obiektów utworzonych poleceniem SQL drzewo nie pokazuje od razu.
+    Prawy przycisk na węźle nadrzędnym -> Refresh.
+
+
+6. NAJCZĘSTSZE BŁĘDY
+----------------------------------------------------------------------
+
+Objaw:        syntax error at or near "123456"
+              przy CREATE DATABASE 123456;
+Przyczyna:    identyfikator nie może zaczynać się od cyfry
+Rozwiązanie:  użyj nazwy z literą na początku albo cudzysłowu:
+              "123456" (wtedy każde odwołanie też w cudzysłowie)
+
+Objaw:        utworzony schemat Katalog2 widnieje jako katalog2
+Przyczyna:    nazwy bez cudzysłowu są zamieniane na małe litery
+Rozwiązanie:  pisz nazwy małymi literami
+
+Objaw:        relation "ksiazka" does not exist
+Przyczyna:    tabela jest w schemacie spoza search_path
+Rozwiązanie:  nazwa kwalifikowana katalog.ksiazka albo zmiana
+              search_path
+
+Objaw:        tabela powstała w public zamiast w swoim schemacie
+Przyczyna:    CREATE TABLE bez nazwy schematu, schemat nie był
+              pierwszy na ścieżce
+Rozwiązanie:  usuń ją (DROP TABLE public.nazwa;) i utwórz z nazwą
+              kwalifikowaną
+
+Objaw:        schemat lub tabela powstały w bazie postgres
+Przyczyna:    Query Tool był otwarty na innej bazie
+Rozwiązanie:  sprawdź nagłówek karty Query Tool lub
+              SELECT current_database();
+
+Objaw:        po \l nic się nie dzieje, pojawia się -# lub -(
+Przyczyna:    poprzednie polecenie SQL nie zostało zakończone
+              średnikiem
+Rozwiązanie:  wpisz ; albo \r, by wyczyścić bufor
+
+Objaw:        nowy obiekt nie widnieje w drzewie pgAdmin
+Przyczyna:    drzewo nie odświeża się samo
+Rozwiązanie:  prawy przycisk -> Refresh
+
+Objaw:        \dt nie pokazuje tabel schematów systemowych
+Przyczyna:    \dt bez wzorca pomija pg_catalog i information_schema
+Rozwiązanie:  \dtS albo wzorzec schemat.*
+
+
+7. ŚCIĄGA
+----------------------------------------------------------------------
+
+  Lista baz
+    psql: \l
+    SQL:  SELECT datname FROM pg_database;
+
+  Zmiana bazy
+    psql: \c baza
+    SQL:  (nie istnieje – wymaga nowego połączenia)
+
+  Gdzie jestem
+    psql: \conninfo
+    SQL:  SELECT current_database(), current_user;
+
+  Lista schematów
+    psql: \dn, \dnS
+    SQL:  SELECT schema_name FROM information_schema.schemata;
+
+  Lista tabel
+    psql: \dt, \dt schemat.*
+    SQL:  SELECT table_name FROM information_schema.tables
+          WHERE table_schema = '...';
+
+  Struktura tabeli
+    psql: \d tabela, \d+ tabela
+    SQL:  SELECT ... FROM information_schema.columns WHERE ...;
+
+  Ścieżka przeszukiwania
+    SQL:  SHOW search_path;   SET search_path TO ...;
+
+  Pomoc
+    psql: \?, \h polecenie
+
+
+DOKUMENTACJA
+----------------------------------------------------------------------
+  psql:                   https://www.postgresql.org/docs/16/app-psql.html
+  Schematy i search_path: https://www.postgresql.org/docs/16/ddl-schemas.html
+  CREATE TABLE:           https://www.postgresql.org/docs/16/sql-createtable.html
+  pgAdmin 4:              https://www.pgadmin.org/docs/pgadmin4/latest/
