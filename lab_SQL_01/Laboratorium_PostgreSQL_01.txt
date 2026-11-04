@@ -1,0 +1,194 @@
+﻿======================================================================
+LABORATORIUM – PostgreSQL: psql i pgAdmin
+Bazy danych · dr Mariusz Skrzypek
+======================================================================
+
+
+1. INFORMACJE OGÓLNE
+----------------------------------------------------------------------
+
+Na tym laboratorium utworzysz własną bazę danych, schemat i pierwszą
+tabelę w PostgreSQL, korzystając z dwóch narzędzi: klienta tekstowego
+psql i graficznego pgAdmin 4.
+
+  Przedmiot ........... Bazy danych – laboratorium
+  Temat ............... Praca z PostgreSQL w psql i pgAdmin:
+                        bazy, schematy, tabele
+  Czas ................ 90 minut
+  Forma ............... praca samodzielna, sprawozdanie ze zrzutami
+                        ekranu
+  Materiał pomocniczy . Przewodnik – podstawowe polecenia psql
+                        i pgAdmin
+
+Po zajęciach student potrafi:
+  1. połączyć się z serwerem PostgreSQL z poziomu psql i pgAdmin,
+  2. przeglądać bazy, schematy i tabele poleceniami psql,
+  3. wyjaśnić, czym jest ścieżka przeszukiwania (search_path)
+     i ustawić ją,
+  4. utworzyć bazę danych, schemat i tabelę oraz odczytać strukturę
+     tabeli.
+
+Przewodnik pokazuje polecenia na innej bazie (biblioteka) niż ta,
+którą tworzysz. Twoim zadaniem jest przenieść te polecenia na własne
+obiekty.
+
+
+2. PRZYGOTOWANIE I IDENTYFIKATOR STUDENTA
+----------------------------------------------------------------------
+
+Wszystkie tworzone obiekty nazywasz swoim identyfikatorem studenta:
+litera s i numer albumu, małymi literami, bez spacji
+(np. album 123456 -> s123456).
+
+  Obiekt         Nazwa
+  -------------  ------------------------------------------
+  Baza danych    s<numer_albumu>
+  Schemat        s<numer_albumu>  (taka sama jak baza)
+  Tabela         student
+
+Przed rozpoczęciem ustal u prowadzącego:
+  - adres serwera (host) i port (domyślnie 5432),
+  - nazwę użytkownika i hasło, którymi logujesz się do serwera.
+
+  UWAGA: Dlaczego litera s na początku? Nazwa zaczynająca się od cyfry
+  nie jest poprawnym identyfikatorem SQL. Wyjaśnienie znajdziesz
+  w przewodniku, w sekcji o najczęstszych błędach.
+
+Część A wykonujesz na bazie postgres, która istnieje na każdym
+serwerze. Swoją bazę tworzysz w części B, a na końcu wracasz do psql
+i sprawdzasz ją (zadanie C).
+
+
+3. CZĘŚĆ A – PRACA W psql
+----------------------------------------------------------------------
+
+Uruchom psql (terminal lub PSQL Tool w pgAdmin) i połącz się
+z serwerem jako swój użytkownik. Do sprawozdania zapisz każde użyte
+polecenie i zrzut ekranu jego wyniku.
+
+Zadanie A1. Lista baz danych.
+  Wyświetl wszystkie bazy danych na serwerze.
+  Odpowiedz: ile baz widzisz, kto jest właścicielem bazy postgres
+  i jakie ma kodowanie znaków?
+
+Zadanie A2. Połączenie z bazą.
+  Z poziomu działającej sesji psql, bez jej zamykania, połącz się
+  z bazą template1, a potem wróć do bazy postgres. Następnie sprawdź,
+  z jaką bazą, jako jaki użytkownik i na jakim porcie jesteś
+  połączony.
+
+Zadanie A3. Lista schematów.
+  Wyświetl schematy w bieżącej bazie. Potem wyświetl je ponownie,
+  łącznie ze schematami systemowymi.
+  Odpowiedz: jakie schematy doszły w drugim wyniku i do czego służą?
+
+Zadanie A4. Lista tabel.
+  Wyświetl tabele w bieżącej ścieżce przeszukiwania. Następnie
+  wyświetl tabele schematu information_schema.
+  Odpowiedz: dlaczego pierwsze polecenie nie pokazało tych tabel?
+
+Zadanie A5. Ścieżka przeszukiwania.
+  Wyświetl bieżącą wartość search_path i wyjaśnij znaczenie elementu
+  "$user". Policz wiersze tabeli sql_features zapytaniem bez nazwy
+  schematu. Następnie ustaw ścieżkę tak, aby pierwszy był schemat
+  information_schema, a drugi public, i wykonaj to samo zapytanie
+  ponownie.
+  Odpowiedz: dlaczego wyniki się różnią i na jak długo obowiązuje tak
+  ustawiona ścieżka?
+
+
+4. CZĘŚĆ B – PRACA W pgAdmin
+----------------------------------------------------------------------
+
+Uruchom pgAdmin 4 i zarejestruj serwer danymi od prowadzącego.
+Zadania B1–B3 wykonaj w interfejsie graficznym. W zadaniu B5 użyj
+Query Tool i polecenia SQL. Do sprawozdania dołącz zrzuty ekranu oraz
+tekst poleceń SQL, które pgAdmin pokazuje na zakładce SQL okien
+tworzenia obiektów.
+
+Zadanie B1. Utworzenie bazy danych.
+  Utwórz bazę danych o nazwie równej swojemu identyfikatorowi
+  studenta. Właścicielem bazy ma być Twój użytkownik, a kodowaniem
+  UTF8. Przed zatwierdzeniem przepisz polecenie SQL wygenerowane przez
+  pgAdmin.
+
+Zadanie B2. Połączenie z bazą.
+  Połącz się z nową bazą w drzewie obiektów i otwórz dla niej Query
+  Tool. Zapytaniem potwierdź, że pracujesz w swojej bazie.
+
+Zadanie B3. Utworzenie schematu.
+  W swojej bazie utwórz schemat o takiej samej nazwie jak baza.
+  Właścicielem schematu ma być Twój użytkownik.
+
+Zadanie B4. Tabele w schemacie.
+  Wyświetl tabele w swoim schemacie na dwa sposoby: w drzewie obiektów
+  oraz zapytaniem do katalogu systemowego.
+  Odpowiedz: co pokazuje wynik przed utworzeniem tabeli?
+
+Zadanie B5. Utworzenie tabeli student.
+  W swoim schemacie utwórz poleceniem SQL tabelę student z kolumnami:
+
+  Kolumna       Zawartość               Wymagania
+  ------------  ----------------------  ------------------------------
+  id_studenta   identyfikator studenta  klucz główny
+  nazwisko      nazwisko                wymagane
+  imie          imię                    wymagane
+  rok           rok studiów             liczba całkowita od 1 do 5
+  kierunek      nazwa kierunku          tekst
+
+  Typy danych i długości pól dobierz samodzielnie. W sprawozdaniu
+  uzasadnij każdy wybór w jednym zdaniu. Tabela musi powstać w Twoim
+  schemacie, a nie w public.
+
+Zadanie B6. Struktura tabeli.
+  Wyświetl strukturę tabeli student na dwa sposoby: we właściwościach
+  tabeli w pgAdmin (zakładka Columns oraz SQL) i zapytaniem do
+  information_schema. Wynik ma pokazywać nazwę kolumny, typ, długość
+  i to, czy kolumna dopuszcza NULL.
+
+
+5. CZĘŚĆ C – WERYFIKACJA W psql
+----------------------------------------------------------------------
+
+Zadanie C.
+  Wróć do psql i połącz się ze swoją bazą. Wyświetl jej schematy
+  i tabele. Ustaw ścieżkę przeszukiwania tak, aby polecenie
+  \d student działało bez podawania nazwy schematu. Następnie ustaw ją
+  trwale dla swojej bazy i sprawdź w nowej sesji, że ustawienie się
+  zachowało.
+
+
+6. SPRAWOZDANIE I OCENA
+----------------------------------------------------------------------
+
+Sprawozdanie oddajesz jako jeden plik PDF o nazwie
+s<numer_albumu>_lab_psql_pgadmin.pdf. Dla każdego zadania podaj:
+polecenie (tekst, nie tylko zrzut), zrzut ekranu wyniku i odpowiedź
+na pytania z treści zadania.
+
+  Część         Zakres                                       Punkty
+  ------------  -------------------------------------------  ------
+  A             A1–A4 (po 2 pkt), A5 (4 pkt)                     12
+  B             B1, B2, B3, B4 (po 2 pkt), B5 (6 pkt),           18
+                B6 (4 pkt)
+  C             weryfikacja i trwała ścieżka przeszukiwania       5
+  Sprawozdanie  kompletność, czytelność, poprawne nazwy           5
+                obiektów
+  ------------  -------------------------------------------  ------
+  RAZEM                                                          40
+
+Obiekt o nazwie innej niż identyfikator studenta albo tabela utworzona
+w schemacie public to 0 pkt za dane zadanie.
+
+Pytania kontrolne (obrona ustna):
+  1. Czym różni się polecenie psql z ukośnikiem od polecenia SQL?
+     Kto je wykonuje?
+  2. Dlaczego zmiana bazy wymaga nowego połączenia, a zmiana schematu
+     nie?
+  3. W jakim schemacie powstanie tabela utworzona bez nazwy schematu?
+     Od czego to zależy?
+  4. Jaka jest różnica między SET search_path
+     a ALTER DATABASE ... SET search_path?
+  5. Dlaczego nazwa bazy 123456 wymaga cudzysłowu, a s123456 nie?
+  6. Które kolumny tabeli student dopuszczają NULL i czy to dobry
+     wybór?
