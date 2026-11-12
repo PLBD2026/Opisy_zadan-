@@ -1,0 +1,332 @@
+﻿======================================================================
+LABORATORIUM 2 – Tabele, klucze główne i obce, więzy integralności
+Bazy danych · dr Mariusz Skrzypek · PostgreSQL 18
+======================================================================
+
+
+1. INFORMACJE OGÓLNE
+----------------------------------------------------------------------
+
+Na tym laboratorium zbudujesz bazę danych sieci przychodni
+„Zdrowie”: utworzysz tabele, zdefiniujesz klucze główne i obce
+oraz więzy integralności, a następnie wprowadzisz dane i sprawdzisz,
+czy baza odrzuca dane niepoprawne.
+
+  Przedmiot ........... Bazy danych – laboratorium
+  Czas ................ 90 minut (część zadań można dokończyć w domu)
+  Środowisko .......... PostgreSQL 18, psql lub Query Tool w pgAdmin
+  Materiał pomocniczy . Przewodnik – tabele, klucze, więzy i INSERT
+  Wymaganie wstępne ... baza i schemat s<numer_albumu> z laboratorium 1
+
+Po zajęciach student potrafi:
+  1. utworzyć tabelę z kluczem głównym prostym i złożonym,
+  2. zdefiniować klucz obcy prosty i złożony oraz dobrać akcję
+     ON DELETE,
+  3. rozróżnić więzy kolumnowe i tablicowe i stosować oba rodzaje,
+  4. ograniczyć wartości kolumny (NOT NULL, UNIQUE, CHECK, DEFAULT),
+  5. wprowadzić dane poleceniem INSERT INTO w poprawnej kolejności,
+  6. odczytać komunikat o naruszeniu więzów i wskazać jego przyczynę.
+
+ZASADY OBOWIĄZUJĄCE WE WSZYSTKICH ZADANIACH
+  - Wszystkie obiekty tworzysz w swoim schemacie s<numer_albumu>.
+  - Wszystkie polecenia zapisujesz w jednym pliku skryptu
+    lab2_s<numer_albumu>.sql, w kolejności wykonania.
+  - Każdy więz klucza głównego, klucza obcego, UNIQUE i CHECK ma nazwę
+    nadaną przez Ciebie (CONSTRAINT nazwa ...) według konwencji:
+
+      pk_<tabela>              klucz główny
+      fk_<tabela>_<cel>        klucz obcy
+      uq_<tabela>_<kolumna>    unikalność
+      ck_<tabela>_<opis>       warunek CHECK
+
+    Dzięki temu komunikat o błędzie od razu mówi, który więz zadziałał.
+  - Typy danych i długości pól dobierasz samodzielnie, chyba że treść
+    zadania mówi inaczej.
+
+
+2. OPIS DZIEDZINY – SIEĆ PRZYCHODNI „ZDROWIE”
+----------------------------------------------------------------------
+
+Sieć „Zdrowie” ma kilka placówek. Każda placówka ma unikalną
+nazwę, adres z kodem pocztowym i opcjonalny numer telefonu.
+W placówce są gabinety. Numer gabinetu jest unikalny tylko w obrębie
+placówki: gabinet „101” może istnieć w Centrum i na Czechowie.
+
+Lekarz jest zatrudniony w jednej placówce. Identyfikuje go numer prawa
+wykonywania zawodu (PWZ), ale w bazie ma też sztuczny identyfikator
+nadawany automatycznie. Lekarz może mieć kilka specjalizacji, a każdą
+specjalizację może mieć wielu lekarzy. Dla pary lekarz–specjalizacja
+zapisujemy datę jej uzyskania.
+
+Pacjenta identyfikuje PESEL. Rejestracja musi mieć z pacjentem
+kontakt, więc pacjent podaje telefon, e-mail albo oba.
+
+Wizyta to spotkanie pacjenta z lekarzem w określonym dniu i godzinach,
+w placówce. Wizyta stacjonarna odbywa się w gabinecie tej placówki.
+Teleporada nie zajmuje gabinetu. Lekarz nie może mieć dwóch wizyt
+rozpoczynających się w tym samym dniu o tej samej godzinie. Przychodnia
+pracuje od 7:00 do 20:00.
+
+
+3. ZADANIA
+----------------------------------------------------------------------
+
+Zadanie 1. Przygotowanie
+  Połącz się ze swoją bazą, ustaw ścieżkę przeszukiwania na swój
+  schemat i sprawdź, w jakim schemacie będą powstawać nowe obiekty.
+  Na początku skryptu umieść polecenia, które usuną tabele, jeśli już
+  istnieją, tak aby skrypt można było uruchamiać wielokrotnie.
+
+
+Zadanie 2. Tabele placowka i specjalizacja
+
+  placowka
+    id_placowki   liczba całkowita, klucz główny (wartość podawana
+                  ręcznie)
+    nazwa         wymagana, unikalna
+    miasto        wymagane
+    ulica         wymagana (ulica i numer)
+    kod           wymagany, w formacie polskiego kodu pocztowego:
+                  dwie cyfry, myślnik, trzy cyfry (np. 20-618)
+    telefon       opcjonalny
+
+  specjalizacja
+    kod_spec      dokładnie 3 wielkie litery (np. INT), klucz główny
+    nazwa         wymagana, unikalna
+
+  Klucz główny placowka zdefiniuj jako więz kolumnowy.
+
+
+Zadanie 3. Tabela gabinet – klucz złożony
+
+  gabinet
+    id_placowki   wymagany, wskazuje placówkę
+    nr_gabinetu   wymagany, tekst do 5 znaków (np. 101, 2A)
+    pietro        wymagane, od -1 do 5, domyślnie 0
+    przeznaczenie wymagane, jedna z wartości: ogólny, zabiegowy,
+                  diagnostyczny; domyślnie ogólny
+
+  Klucz główny tworzy para (id_placowki, nr_gabinetu) – zdefiniuj go
+  jako więz tablicowy. Usunięcie placówki ma automatycznie usuwać jej
+  gabinety.
+
+
+Zadanie 4. Tabele lekarz i lekarz_specjalizacja
+
+  lekarz
+    id_lekarza    nadawany automatycznie przez system (kolumna
+                  tożsamości), klucz główny
+    nr_pwz        wymagany, unikalny, dokładnie 7 cyfr, pierwsza
+                  cyfra różna od 0
+    imie          wymagane
+    nazwisko      wymagane
+    email         opcjonalny, unikalny, musi zawierać znak @
+    id_placowki   wymagany, wskazuje placówkę; nie wolno usunąć
+                  placówki, w której pracują lekarze
+
+  lekarz_specjalizacja  (związek wiele do wielu)
+    id_lekarza       wskazuje lekarza
+    kod_spec         wskazuje specjalizację
+    data_uzyskania   wymagana, nie wcześniejsza niż 1980-01-01
+
+  Klucz główny: para (id_lekarza, kod_spec). Usunięcie lekarza ma
+  usuwać jego specjalizacje. Specjalizacji przypisanej choć jednemu
+  lekarzowi nie wolno usunąć.
+
+
+Zadanie 5. Tabela pacjent – więz tablicowy CHECK
+
+  pacjent
+    id_pacjenta     nadawany automatycznie, klucz główny
+    pesel           wymagany, unikalny, dokładnie 11 cyfr
+    imie            wymagane
+    nazwisko        wymagane
+    data_urodzenia  wymagana, nie wcześniejsza niż 1900-01-01
+    plec            wymagana, jedna litera: K lub M
+    telefon         opcjonalny
+    email           opcjonalny
+
+  Pacjent musi mieć podany telefon lub e-mail (co najmniej jedno).
+  Zastanów się, dlaczego ten warunek musi być więzem tablicowym.
+
+
+Zadanie 6. Tabela wizyta
+
+  wizyta
+    id_wizyty     nadawany automatycznie, klucz główny
+    id_pacjenta   wymagany; nie wolno usunąć pacjenta, który ma wizyty
+    id_lekarza    wymagany; nie wolno usunąć lekarza, który ma wizyty
+    id_placowki   wymagany, wskazuje placówkę
+    nr_gabinetu   opcjonalny
+    data_wizyty   wymagana
+    godz_od       wymagana
+    godz_do       wymagana
+    czas_trwania  kolumna wyliczana: godz_do - godz_od (kolumna
+                  generowana, której nie wolno wpisywać ręcznie)
+    typ           wymagany: pierwszorazowa, kontrolna, teleporada
+    status        wymagany: zaplanowana, odbyta, odwołana;
+                  domyślnie zaplanowana
+    oplata        kwota z dokładnością do groszy, nieujemna,
+                  domyślnie 0
+
+  Reguły dotyczące całego wiersza (więzy tablicowe):
+    a) para (id_placowki, nr_gabinetu) musi wskazywać istniejący
+       gabinet tej placówki (złożony klucz obcy),
+    b) godz_do jest późniejsza niż godz_od, a wizyta mieści się
+       w godzinach 7:00–20:00,
+    c) teleporada nie ma gabinetu, a każda inna wizyta musi go mieć,
+    d) lekarz nie może mieć dwóch wizyt o tym samym dniu i godzinie
+       rozpoczęcia.
+
+
+Zadanie 7. Przegląd więzów
+  Wyświetl strukturę tabel wizyta i pacjent poleceniem psql oraz listę
+  wszystkich więzów tabeli wizyta zapytaniem do katalogu systemowego
+  (nazwa więzu, typ, definicja).
+  Odpowiedz:
+    - które więzy tabeli wizyta są kolumnowe, a które tablicowe?
+    - jakie więzy pojawiły się w katalogu, choć nie nadałeś im nazwy,
+      i skąd się wzięły?
+
+
+Zadanie 8. Wprowadzenie danych – INSERT INTO
+  Wprowadź dane z rozdziału 4. Wymagania:
+    - jedno polecenie INSERT na jeden wiersz,
+    - w każdym poleceniu podaj listę kolumn,
+    - tam, gdzie w danych jest „(domyślnie)”, nie podawaj wartości
+      i pozwól zadziałać wartości domyślnej,
+    - przy pierwszym wstawianym lekarzu użyj klauzuli, która zwróci
+      nadany identyfikator,
+    - ustal i opisz w sprawozdaniu, w jakiej kolejności trzeba
+      wypełniać tabele i dlaczego.
+
+  Po wprowadzeniu danych wyświetl zawartość tabeli wizyta razem
+  z kolumną czas_trwania.
+
+  UWAGA: identyfikatory lekarzy, pacjentów i wizyt nadaje system.
+  Dane zakładają numerację od 1 w kolejności wierszy. Jeśli wcześniej
+  nieudane INSERT-y „zużyły” numery, wyczyść tabelę z restartem
+  numeracji (patrz przewodnik) i wstaw dane ponownie.
+
+
+Zadanie 9. Testy więzów integralności
+  Dla każdej sytuacji napisz jedno polecenie, które ją wywołuje,
+  wykonaj je i zapisz komunikat błędu oraz nazwę więzu, który zadziałał.
+  Każde z poleceń T1–T14 musi zostać odrzucone. Jeśli któreś się wykona,
+  popraw definicję tabeli.
+
+    T1   pacjent z PESEL-em, który już jest w bazie
+    T2   pacjent bez telefonu i bez e-maila
+    T3   pacjent z płcią X
+    T4   pacjent z PESEL-em złożonym z 10 cyfr
+    T5   wizyta pacjenta, którego nie ma w bazie
+    T6   wizyta w placówce 2 w gabinecie 101 (gabinet o tym numerze
+         istnieje, ale w innej placówce)
+    T7   wizyta kończąca się przed rozpoczęciem
+    T8   druga wizyta lekarki Anny Wiśniewskiej 2026-12-01 o 8:00
+    T9   teleporada z przypisanym gabinetem
+    T10  wizyta kontrolna bez gabinetu
+    T11  wizyta ze statusem „przełożona”
+    T12  placówka z kodem pocztowym 20020
+    T13  usunięcie pacjentki Marty Nowak
+    T14  wizyta z ręcznie wpisaną wartością kolumny czas_trwania
+
+  Polecenia, które muszą się wykonać – wykonaj je w jednej transakcji
+  zakończonej ROLLBACK, aby nie stracić danych:
+    T15  usunięcie wizyt lekarki Ewy Zając, a potem jej samej;
+         przed ROLLBACK sprawdź, co stało się z jej specjalizacjami,
+         i wyjaśnij, dlaczego bez wcześniejszego usunięcia wizyt
+         usunięcie lekarki by się nie udało.
+
+
+Zadanie dodatkowe – grafik dyżurów (funkcja PostgreSQL 18)
+  Utwórz tabelę dyzur: lekarz, placówka i okres dyżuru (typ zakresu
+  daty i czasu). Klucz główny ma zagwarantować, że okresy dyżurów
+  tego samego lekarza się nie nakładają. Pokaż jedno wstawienie
+  poprawne i jedno odrzucone. Wymaga rozszerzenia btree_gist.
+
+
+4. DANE DO WPROWADZENIA
+----------------------------------------------------------------------
+
+placowka
+  id  nazwa                   miasto  ulica                        kod     telefon
+  --  ----------------------  ------  ---------------------------  ------  ------------
+  1   Zdrowie – Centrum       Lublin  ul. Lipowa 12                20-020  81 532 10 10
+  2   Zdrowie – Czechów       Lublin  ul. Kompozytorów Polskich 4  20-848  (brak)
+
+gabinet
+  id_placowki  nr_gabinetu  pietro        przeznaczenie
+  -----------  -----------  ------------  -------------------------
+  1            101          1             ogólny
+  1            102          1             zabiegowy
+  2            1            (domyślnie)   (domyślnie)
+  2            2A           0             diagnostyczny
+
+specjalizacja
+  kod  nazwa
+  ---  ------------------
+  INT  choroby wewnętrzne
+  PED  pediatria
+  KAR  kardiologia
+
+lekarz  (id nadaje system: 1, 2, 3)
+  nr_pwz   imie    nazwisko    email                       id_placowki
+  -------  ------  ----------  --------------------------  -----------
+  3456781  Anna    Wiśniewska  a.wisniewska@zdrowie.pl     1
+  5123409  Tomasz  Kowalczyk   t.kowalczyk@zdrowie.pl      1
+  2987650  Ewa     Zając       (brak)                      2
+
+lekarz_specjalizacja
+  lekarz          kod  data_uzyskania
+  --------------  ---  --------------
+  1 Wiśniewska    INT  2009-06-30
+  1 Wiśniewska    KAR  2015-03-15
+  2 Kowalczyk     INT  2012-10-01
+  3 Zając         PED  2005-09-20
+
+pacjent  (id nadaje system: 1–4)
+  pesel        imie      nazwisko  data_ur.    plec  telefon       email
+  -----------  --------  --------  ----------  ----  ------------  ----------------------
+  85031204567  Marta     Nowak     1985-03-12  K     600100200     (brak)
+  72110805831  Jan       Kamiński  1972-11-08  M     (brak)        jan.kaminski@poczta.pl
+  18252301240  Zofia     Mazur     2018-05-23  K     601222333     r.mazur@poczta.pl
+  64040412348  Krystyna  Wójcik    1964-04-04  K     81 744 55 66  k.wojcik@poczta.pl
+
+wizyta  (id nadaje system: 1–5)
+  pacjent       lekarz          plac.  gab.    data        od     do     typ             status        opłata
+  ------------  --------------  -----  ------  ----------  -----  -----  --------------  ------------  -----------
+  1 Nowak       1 Wiśniewska    1      101     2026-12-01  08:00  08:20  pierwszorazowa  odbyta        0
+  4 Wójcik      1 Wiśniewska    1      101     2026-12-01  08:20  08:40  kontrolna       odbyta        (domyślnie)
+  2 Kamiński    2 Kowalczyk     1      102     2026-12-02  10:00  10:30  kontrolna       (domyślnie)   150.00
+  3 Mazur       3 Zając         2      2A      2026-12-03  12:00  12:20  pierwszorazowa  (domyślnie)   (domyślnie)
+  2 Kamiński    2 Kowalczyk     1      (brak)  2026-12-03  16:00  16:15  teleporada      (domyślnie)   (domyślnie)
+
+  (brak) oznacza wartość nieznaną – NULL; nie wpisuj tekstu „brak”.
+  Numery PESEL i PWZ są fikcyjne.
+
+
+5. SPRAWOZDANIE
+----------------------------------------------------------------------
+
+Oddajesz dwa pliki:
+  - lab2_s<numer_albumu>.sql – kompletny skrypt, który na pustym
+    schemacie tworzy wszystkie obiekty i wprowadza dane bez błędów
+    (polecenia testowe z zadania 9 umieść na końcu, w komentarzu
+    lub osobnej sekcji),
+  - lab2_s<numer_albumu>.pdf – odpowiedzi na pytania, wyniki zadań
+    7 i 8 oraz tabela testów z zadania 9:
+
+      Test | Polecenie | Komunikat błędu | Nazwa więzu | Rodzaj więzu
+
+Pytania kontrolne (obrona ustna):
+  1. Czym różni się więz kolumnowy od tablicowego? Których więzów nie
+     da się zapisać jako kolumnowe?
+  2. Dlaczego gabinet ma klucz złożony, a nie sam nr_gabinetu?
+  3. Co się stanie, gdy w złożonym kluczu obcym jedna z kolumn ma
+     wartość NULL? Jak wykorzystano to w tabeli wizyta?
+  4. Czym różni się ON DELETE CASCADE od RESTRICT i SET NULL?
+     Uzasadnij wybór dla każdego klucza obcego w Twojej bazie.
+  5. Czym różni się UNIQUE od PRIMARY KEY?
+  6. Dlaczego po nieudanym INSERT-cie w numeracji identyfikatorów
+     pojawia się luka?
